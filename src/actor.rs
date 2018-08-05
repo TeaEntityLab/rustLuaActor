@@ -1,4 +1,5 @@
 
+use rlua::Value::Integer;
 use std::sync::{Arc,Mutex};
 
 use fp_rust::{
@@ -6,23 +7,42 @@ use fp_rust::{
     sync::{CountDownLatch},
     handler::{Handler,HandlerThread},
 };
-use rlua::{Lua,UserData,Error,Error::RuntimeError};
+use rlua::{Lua,Value,FromLua,ToLua,UserData,Error,Error::RuntimeError,Function};
 
-// pub struct TypeI8(i8);
-// impl UserData for TypeI8 {}
+#[derive(Clone)]
+pub struct TypeI8(i8);
+impl UserData for TypeI8 {
+}
+impl From<TypeI8> for i8 {
+    fn from(v: TypeI8) -> i8 {
+        v.0
+    }
+}
 // pub struct TypeI16(i16);
-// impl UserData for TypeI16 {}
+// impl <'lua> ToLua<'lua> for TypeI16 {
+//
+// }
 // pub struct TypeI32(i32);
-// impl UserData for TypeI32 {}
+// impl <'lua> ToLua<'lua> for TypeI32 {
+//
+// }
 // pub struct TypeI64(i64);
-// impl UserData for TypeI64 {}
+// impl <'lua> ToLua<'lua> for TypeI64 {
+//
+// }
 // pub struct TypeI128(i128);
-// impl UserData for TypeI128 {}
+// impl <'lua> ToLua<'lua> for TypeI128 {
+//
+// }
 //
 // pub struct TypeF32(f32);
-// impl UserData for TypeF32 {}
+// impl <'lua> ToLua<'lua> for TypeF32 {
+//
+// }
 // pub struct TypeF64(f64);
-// impl UserData for TypeF64 {}
+// impl <'lua> ToLua<'lua> for TypeF64 {
+//
+// }
 
 #[derive(Clone)]
 pub struct Actor {
@@ -145,26 +165,52 @@ impl Actor {
     // pub fn _load<'lua>(vm: &'lua Lua, source: &str, name: Option<&str>) -> Result<Function<'lua>, Error> {
     //     Ok(vm.load(source, name)?)
     // }
-    pub fn exec(&self, source: &'static str, name: Option<&'static str>) -> Result<(), Error> {
+    pub fn exec<T: UserData + Send + Clone>(&self, source: &'static str, name: Option<&'static str>) -> Result<T, Error> {
         match self.handler.clone() {
             Some(_handler) => {
+                let _result : Arc<Mutex<Result<T, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
+                let result : Arc<Mutex<Result<T, Error>>> = _result.clone();
                 let lua = self.lua.clone();
 
+                let done_latch = CountDownLatch::new(1);
+
+                let done_latch2 = done_latch.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move ||{
                     let lua = lua.clone();
-                    let _ = Self::_exec(lua, source, name);
+                    {
+                        (*result.lock().unwrap()) = Self::_exec(lua, source, name);
+                    }
+                    done_latch2.countdown();
                 }));
 
-                Ok(())
+                done_latch.wait();
+
+                {
+                    let _result = &*_result.lock().unwrap();
+                    match _result {
+                        Ok(_result) => {
+                            Ok(_result.clone())
+                        },
+                        Err(_err) => {
+                            Err(_err.clone())
+                        }
+                    }
+                }
             },
             None => {
                 Self::_exec(self.lua.clone(), source, name)
             }
         }
     }
-    pub fn _exec(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<(), Error> {
+    pub fn _exec<T: UserData + Clone>(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<T, Error> {
         let vm = lua.lock().unwrap();
         Ok(vm.exec(source, name)?)
+    }
+
+    pub fn _call<T: UserData + Clone, X: UserData + Send>(lua: Arc<Mutex<Lua>>, name: String, args: X) -> Result<T, Error> {
+        let vm = lua.lock().unwrap();
+        let func: Function = vm.globals().get(name)?;
+        Ok(func.call::<_, T>(args)?)
     }
 }
 
@@ -173,11 +219,13 @@ fn test_handler_new() {
     use std::time;
     use std::thread;
 
-    let act = Actor::new();
+    let act = Actor::new_with_handler(None);
 
-    let _ = act.exec(r#"
-        var i = 3;
-    "#, None);
+    let i: TypeI8 = act.exec(r#"
+        let i = 1
+        return 1
+    "#, None).ok().unwrap_or(TypeI8(0));
+    // assert_eq!(30, i8::from(i));
 
     thread::sleep(time::Duration::from_millis(100));
 
