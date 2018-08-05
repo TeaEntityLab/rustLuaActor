@@ -223,6 +223,11 @@ fn test_actor_new() {
 
     let act = Actor::new_with_handler(None);
 
+    let _ = act.exec(r#"
+        i = 1
+    "#, None);
+    assert_eq!(LuaMessage::from(1), (act.get_global("i".to_string()).ok().unwrap()));
+
     // let i: LuaMessage = act.exec(r#"
     //     let i = 1
     //     return "1"
