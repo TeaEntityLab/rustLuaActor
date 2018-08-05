@@ -145,44 +145,24 @@ impl Actor {
     // pub fn _load<'lua>(vm: &'lua Lua, source: &str, name: Option<&str>) -> Result<Function<'lua>, Error> {
     //     Ok(vm.load(source, name)?)
     // }
-    pub fn exec<T: UserData + Send + Clone>(&self, source: &'static str, name: Option<&'static str>) -> Result<T, Error> {
+    pub fn exec(&self, source: &'static str, name: Option<&'static str>) -> Result<(), Error> {
         match self.handler.clone() {
             Some(_handler) => {
-                let _result : Arc<Mutex<Result<T, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
-                let result : Arc<Mutex<Result<T, Error>>> = _result.clone();
                 let lua = self.lua.clone();
 
-                let done_latch = CountDownLatch::new(1);
-
-                let done_latch2 = done_latch.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move ||{
                     let lua = lua.clone();
-                    {
-                        (*result.lock().unwrap()) = Self::_exec(lua, source, name);
-                    }
-                    done_latch2.countdown();
+                    let _ = Self::_exec(lua, source, name);
                 }));
 
-                done_latch.wait();
-
-                {
-                    let _result = &*_result.lock().unwrap();
-                    match _result {
-                        Ok(_result) => {
-                            Ok(_result.clone())
-                        },
-                        Err(_err) => {
-                            Err(_err.clone())
-                        }
-                    }
-                }
+                Ok(())
             },
             None => {
                 Self::_exec(self.lua.clone(), source, name)
             }
         }
     }
-    pub fn _exec<T: UserData + Clone>(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<T, Error> {
+    pub fn _exec(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<(), Error> {
         let vm = lua.lock().unwrap();
         Ok(vm.exec(source, name)?)
     }
