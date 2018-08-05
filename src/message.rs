@@ -21,61 +21,177 @@ impl From<bool> for LuaMessage {
         LuaMessage::Boolean(s)
     }
 }
+impl From<LuaMessage> for Option<bool> {
+    fn from(s: LuaMessage) -> Self {
+        match s {
+            LuaMessage::String(s) => {
+                match s.parse::<bool>() {
+                    Ok(_x) => Some(_x),
+                    Err(_e) => None,
+                }
+            },
+            LuaMessage::Integer(i) => {
+                Some(i > 0)
+            },
+            LuaMessage::Number(f) => {
+                Some(f > 0_f64)
+            },
+            LuaMessage::Boolean(b) => {
+                Some(b)
+            },
+            LuaMessage::Nil => {
+                None
+            },
+            LuaMessage::Table(_h) => {
+                Some(_h.len() > 0)
+            },
+        }
+    }
+}
 
 impl<'l> From<&'l str> for LuaMessage {
     fn from(s: &'l str) -> Self {
         LuaMessage::String(s.to_string())
     }
 }
+impl From<String> for LuaMessage {
+    fn from(s: String) -> Self {
+        LuaMessage::String(s)
+    }
+}
+impl From<LuaMessage> for Option<String> {
+    fn from(s: LuaMessage) -> Self {
+        match s {
+            LuaMessage::String(s) => {
+                Some(s)
+            },
+            LuaMessage::Integer(i) => {
+                Some(i.to_string())
+            },
+            LuaMessage::Number(f) => {
+                Some(f.to_string())
+            },
+            LuaMessage::Boolean(b) => {
+                Some(b.to_string())
+            },
+            LuaMessage::Nil => {
+                None
+            },
+            LuaMessage::Table(_h) => {
+                Some(format!("{:?}",_h))
+            },
+        }
+    }
+}
 
-macro_rules! lua_message_convert_int {
+macro_rules! lua_message_number_convert {
     ($x:ty) => {
-        impl From<$x> for LuaMessage {
-            fn from(s: $x) -> Self {
-                LuaMessage::Integer(i64::from(s))
+        impl From<LuaMessage> for Option<$x> {
+            fn from(s: LuaMessage) -> Self {
+                match s {
+                    LuaMessage::String(s) => {
+                        match s.parse::<$x>() {
+                            Ok(_x) => Some(_x),
+                            Err(_e) => None,
+                        }
+                    },
+                    LuaMessage::Integer(i) => {
+                        Some(i as $x)
+                    },
+                    LuaMessage::Number(f) => {
+                        Some(f as $x)
+                    },
+                    LuaMessage::Boolean(b) => {
+                        if b {
+                            Some(1 as $x)
+                        } else {
+                            Some(0 as $x)
+                        }
+                    },
+                    LuaMessage::Nil => {
+                        None
+                    },
+                    LuaMessage::Table(_h) => {
+                        None
+                    },
+                }
             }
         }
     };
 }
 
-lua_message_convert_int!(i8);
-lua_message_convert_int!(u8);
-lua_message_convert_int!(i16);
-lua_message_convert_int!(u16);
-lua_message_convert_int!(i32);
-lua_message_convert_int!(u32);
-lua_message_convert_int!(i64);
-
-impl From<usize> for LuaMessage {
-    fn from(s: usize) -> Self {
-        LuaMessage::Integer(s as i64)
-    }
+macro_rules! lua_message_convert_from_int {
+    ($x:ty) => {
+        impl From<$x> for LuaMessage {
+            fn from(s: $x) -> Self {
+                LuaMessage::Integer(s as i64)
+            }
+        }
+        lua_message_number_convert!($x);
+    };
 }
 
-impl From<isize> for LuaMessage {
-    fn from(s: isize) -> Self {
-        LuaMessage::Integer(s as i64)
-    }
-}
+lua_message_convert_from_int!(i8);
+lua_message_convert_from_int!(u8);
+lua_message_convert_from_int!(i16);
+lua_message_convert_from_int!(u16);
+lua_message_convert_from_int!(i32);
+lua_message_convert_from_int!(u32);
+lua_message_convert_from_int!(i64);
+lua_message_convert_from_int!(usize);
+lua_message_convert_from_int!(isize);
 
 impl From<HashMap<String, LuaMessage>> for LuaMessage {
     fn from(s: HashMap<String, LuaMessage>) -> Self {
         LuaMessage::Table(s)
     }
 }
+impl From<LuaMessage> for Option<HashMap<String, LuaMessage>> {
+    fn from(s: LuaMessage) -> Self {
+        match s {
+            LuaMessage::String(s) => {
+                let mut h = HashMap::new();
+                h.insert("x".to_string(), LuaMessage::from(s));
+                Some(h)
+            },
+            LuaMessage::Integer(i) => {
+                let mut h = HashMap::new();
+                h.insert("x".to_string(), LuaMessage::from(i));
+                Some(h)
+            },
+            LuaMessage::Number(f) => {
+                let mut h = HashMap::new();
+                h.insert("x".to_string(), LuaMessage::from(f));
+                Some(h)
+            },
+            LuaMessage::Boolean(b) => {
+                let mut h = HashMap::new();
+                h.insert("x".to_string(), LuaMessage::from(b));
+                Some(h)
+            },
+            LuaMessage::Nil => {
+                None
+            },
+            LuaMessage::Table(_h) => {
+                Some(_h)
+            },
+        }
+    }
+}
 
-macro_rules! lua_message_convert_float {
+macro_rules! lua_message_convert_from_float {
     ($x:ty) => {
         impl From<$x> for LuaMessage {
             fn from(s: $x) -> Self {
                 LuaMessage::Number(f64::from(s))
             }
         }
+        lua_message_number_convert!($x);
     };
 }
 
-lua_message_convert_float!(f32);
-lua_message_convert_float!(f64);
+lua_message_convert_from_float!(f32);
+lua_message_convert_from_float!(f64);
 
 impl<'lua> FromLua<'lua> for LuaMessage {
     fn from_lua(v: Value, lua: &'lua Lua) -> LuaResult<LuaMessage> {
@@ -105,7 +221,7 @@ impl<'lua> ToLua<'lua> for LuaMessage {
             LuaMessage::Table(x) => Ok(Value::Table(lua.create_table_from(x)?)),
 
             // You should not create RPCNotifyLater from outside of lua
-            _ => unimplemented!(),
+            // _ => unimplemented!(),
         }
     }
 }

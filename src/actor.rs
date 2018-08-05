@@ -26,17 +26,25 @@ impl Default for Actor {
 
 impl Actor {
     pub fn new() -> Actor {
-        Default::default()
+        let actor: Actor = Default::default();
+        actor.start();
+        actor
     }
-
     pub fn new_with_handler(handler: Option<Arc<Mutex<HandlerThread>>>) -> Actor {
         let mut actor: Actor = Default::default();
         actor.handler = handler;
+        actor.start();
         actor
     }
 
     pub fn lua(&self) -> Arc<Mutex<Lua>> {
         self.lua.clone()
+    }
+    fn start(&self) {
+        match self.handler {
+            Some(ref _h) => _h.lock().unwrap().start(),
+            None => {},
+        }
     }
 
     pub fn set_global(&self, key: String, value: LuaMessage) -> Result<(), Error> {
@@ -171,6 +179,47 @@ impl Actor {
         let vm = lua.lock().unwrap();
         Ok(vm.exec(source, name)?)
     }
+    pub fn eval(&self, source: &'static str, name: Option<&'static str>) -> Result<LuaMessage, Error> {
+        match self.handler.clone() {
+            Some(_handler) => {
+                let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
+                let result : Arc<Mutex<Result<LuaMessage, Error>>> = _result.clone();
+                let lua = self.lua.clone();
+
+                let done_latch = CountDownLatch::new(1);
+
+                let done_latch2 = done_latch.clone();
+                _handler.lock().unwrap().post(RawFunc::new(move ||{
+                    let lua = lua.clone();
+                    {
+                        (*result.lock().unwrap()) = Self::_eval(lua, source, name);
+                    }
+                    done_latch2.countdown();
+                }));
+
+                done_latch.wait();
+
+                {
+                    let _result = &*_result.lock().unwrap();
+                    match _result {
+                        Ok(_result) => {
+                            Ok(_result.clone())
+                        },
+                        Err(_err) => {
+                            Err(_err.clone())
+                        }
+                    }
+                }
+            },
+            None => {
+                Self::_eval(self.lua.clone(), source, name)
+            }
+        }
+    }
+    fn _eval(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<LuaMessage, Error> {
+        let vm = lua.lock().unwrap();
+        Ok(vm.eval(source, name)?)
+    }
 
     pub fn call(&self, name: String, args: LuaMessage) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
@@ -218,23 +267,21 @@ impl Actor {
 
 #[test]
 fn test_actor_new() {
-    use std::time;
-    use std::thread;
 
-    let act = Actor::new_with_handler(None);
+    fn test_actor(act: Actor) -> Result<(), Error> {
+        let _ = act.exec(r#"
+            i = 1
+        "#, None);
+        assert_eq!(Some(1), Option::from(act.get_global("i".to_string())?));
 
-    let _ = act.exec(r#"
-        i = 1
-    "#, None);
-    assert_eq!(LuaMessage::from(1), (act.get_global("i".to_string()).ok().unwrap()));
+        let v = act.eval(r#"
+            3
+        "#, None);
+        assert_eq!(Some(3), Option::from(v?));
 
-    // let i: LuaMessage = act.exec(r#"
-    //     let i = 1
-    //     return "1"
-    // "#, None).ok().unwrap_or(LuaMessage::String(String::from("")));
-    // assert_eq!(30, i8::from(i));
+        Ok(())
+    }
 
-    thread::sleep(time::Duration::from_millis(100));
-
-    // assert_eq!(3, act.get_global::<i64>(String::from("i")).ok().unwrap());
+    let _ = test_actor(Actor::new_with_handler(None));
+    let _ = test_actor(Actor::new());
 }
