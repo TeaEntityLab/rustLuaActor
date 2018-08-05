@@ -1,15 +1,28 @@
-extern crate fp_rust;
-extern crate rlua;
 
-use actor::rlua::Error::RuntimeError;
 use std::sync::{Arc,Mutex};
 
-use actor::fp_rust::{
+use fp_rust::{
     common::{RawFunc,},
     sync::{CountDownLatch},
     handler::{Handler,HandlerThread},
 };
-use actor::rlua::{Lua,UserData,Error};
+use rlua::{Lua,UserData,Error,Error::RuntimeError};
+
+// pub struct TypeI8(i8);
+// impl UserData for TypeI8 {}
+// pub struct TypeI16(i16);
+// impl UserData for TypeI16 {}
+// pub struct TypeI32(i32);
+// impl UserData for TypeI32 {}
+// pub struct TypeI64(i64);
+// impl UserData for TypeI64 {}
+// pub struct TypeI128(i128);
+// impl UserData for TypeI128 {}
+//
+// pub struct TypeF32(f32);
+// impl UserData for TypeF32 {}
+// pub struct TypeF64(f64);
+// impl UserData for TypeF64 {}
 
 #[derive(Clone)]
 pub struct Actor {
@@ -173,4 +186,20 @@ impl Actor {
         let vm = lua.lock().unwrap();
         Ok(vm.exec(source, name)?)
     }
+}
+
+#[test]
+fn test_handler_new() {
+    use std::time;
+    use std::thread;
+
+    let act = Actor::new();
+
+    let _ = act.exec(r#"
+        var i = 3;
+    "#, None);
+
+    thread::sleep(time::Duration::from_millis(100));
+
+    // assert_eq!(3, act.get_global::<i64>(String::from("i")).ok().unwrap());
 }
