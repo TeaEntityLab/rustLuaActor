@@ -1,5 +1,6 @@
 /*!
-Credits: https://github.com/poga/actix-lua/blob/master/src/message.rs
+Credits(mainly, except Array & reverse convertions):
+https://github.com/poga/actix-lua/blob/master/src/message.rs
 */
 
 use rlua::Result as LuaResult;
@@ -14,6 +15,7 @@ pub enum LuaMessage {
     Boolean(bool),
     Nil,
     Table(HashMap<String, LuaMessage>),
+    Array(Vec<LuaMessage>),
 }
 
 impl From<bool> for LuaMessage {
@@ -43,6 +45,9 @@ impl From<LuaMessage> for Option<bool> {
                 None
             },
             LuaMessage::Table(_h) => {
+                Some(_h.len() > 0)
+            },
+            LuaMessage::Array(_h) => {
                 Some(_h.len() > 0)
             },
         }
@@ -80,6 +85,9 @@ impl From<LuaMessage> for Option<String> {
             LuaMessage::Table(_h) => {
                 Some(format!("{:?}",_h))
             },
+            LuaMessage::Array(_h) => {
+                Some(format!("{:?}",_h))
+            },
         }
     }
 }
@@ -112,6 +120,9 @@ macro_rules! lua_message_number_convert {
                         None
                     },
                     LuaMessage::Table(_h) => {
+                        None
+                    },
+                    LuaMessage::Array(_h) => {
                         None
                     },
                 }
@@ -175,6 +186,50 @@ impl From<LuaMessage> for Option<HashMap<String, LuaMessage>> {
             LuaMessage::Table(_h) => {
                 Some(_h)
             },
+            LuaMessage::Array(_h) => {
+                let mut new_one = HashMap::new();
+                for (k, v) in _h.into_iter().enumerate() {
+                    new_one.insert(k.to_string(), v);
+                }
+                Some(new_one)
+            },
+        }
+    }
+}
+impl From<Vec<LuaMessage>> for LuaMessage {
+    fn from(s: Vec<LuaMessage>) -> Self {
+        LuaMessage::Array(s)
+    }
+}
+impl From<LuaMessage> for Option<Vec<LuaMessage>> {
+    fn from(s: LuaMessage) -> Self {
+        match s {
+            LuaMessage::String(s) => {
+                Some(vec!(LuaMessage::from(s)))
+            },
+            LuaMessage::Integer(i) => {
+                Some(vec!(LuaMessage::from(i)))
+            },
+            LuaMessage::Number(f) => {
+                Some(vec!(LuaMessage::from(f)))
+            },
+            LuaMessage::Boolean(b) => {
+                Some(vec!(LuaMessage::from(b)))
+            },
+            LuaMessage::Nil => {
+                None
+            },
+            LuaMessage::Table(_h) => {
+                let mut new_one = vec!();
+                for (_k, v) in _h.into_iter() {
+                    new_one.push(LuaMessage::from(_k));
+                    new_one.push(v);
+                }
+                Some(new_one)
+            },
+            LuaMessage::Array(_h) => {
+                Some(_h)
+            },
         }
     }
 }
@@ -202,8 +257,14 @@ impl<'lua> FromLua<'lua> for LuaMessage {
             Value::Boolean(b) => Ok(LuaMessage::Boolean(b)),
             Value::Nil => Ok(LuaMessage::Nil),
             Value::Table(t) => {
-                Ok(LuaMessage::Table(HashMap::from_lua(Value::Table(t), lua)?))
-            }
+                if t.len()? > 0
+                && t.clone().pairs::<i32, LuaMessage>().count() == t.clone().sequence_values::<LuaMessage>().count()
+                {
+                    Ok(LuaMessage::Array(Vec::from_lua(Value::Table(t), lua)?))
+                } else {
+                    Ok(LuaMessage::Table(HashMap::from_lua(Value::Table(t), lua)?))
+                }
+            },
 
             _ => unimplemented!(),
         }
@@ -219,6 +280,7 @@ impl<'lua> ToLua<'lua> for LuaMessage {
             LuaMessage::Boolean(x) => Ok(Value::Boolean(x)),
             LuaMessage::Nil => Ok(Value::Nil),
             LuaMessage::Table(x) => Ok(Value::Table(lua.create_table_from(x)?)),
+            LuaMessage::Array(x) => Ok(Value::Table(lua.create_sequence_from(x)?)),
 
             // You should not create RPCNotifyLater from outside of lua
             // _ => unimplemented!(),
@@ -317,5 +379,19 @@ mod tests {
             ),
             discriminant(&LuaMessage::Table(t))
         );
+
+        let t = vec!(LuaMessage::from(1),LuaMessage::from(2));
+        assert_eq!(
+            discriminant(
+                &LuaMessage::from_lua(
+                    Value::Table(lua.create_sequence_from(vec!(LuaMessage::from(1),LuaMessage::from(2))).unwrap()), &lua
+                ).unwrap()
+            ),
+            discriminant(&LuaMessage::Array(t.clone()))
+        );
+
+        // println!("{:?}\n{:?}", LuaMessage::Array(t.clone()), LuaMessage::from_lua(
+        //     Value::Table(lua.create_sequence_from(vec!(LuaMessage::from(12),LuaMessage::from(2))).unwrap()), &lua
+        // ).unwrap());
     }
 }
