@@ -27,20 +27,26 @@ impl Default for Actor {
 impl Actor {
     pub fn new() -> Actor {
         let actor: Actor = Default::default();
-        actor.start();
+        actor.start_handler();
         actor
     }
     pub fn new_with_handler(handler: Option<Arc<Mutex<HandlerThread>>>) -> Actor {
         let mut actor: Actor = Default::default();
         actor.handler = handler;
-        actor.start();
+        actor.start_handler();
         actor
     }
 
     pub fn lua(&self) -> Arc<Mutex<Lua>> {
         self.lua.clone()
     }
-    fn start(&self) {
+    pub fn stop_handler(&self) {
+        match self.handler {
+            Some(ref _h) => _h.lock().unwrap().stop(),
+            None => {},
+        }
+    }
+    fn start_handler(&self) {
         match self.handler {
             Some(ref _h) => _h.lock().unwrap().start(),
             None => {},
@@ -152,6 +158,21 @@ impl Actor {
             },
             None => {
                 Self::_exec(self.lua.clone(), source, name)
+            }
+        }
+    }
+    pub fn exec_nowait(&self, source: &'static str, name: Option<&'static str>) -> Result<(), Error> {
+        match self.handler.clone() {
+            Some(_handler) => {
+                let lua = self.lua.clone();
+                _handler.lock().unwrap().post(RawFunc::new(move ||{
+                    let _ = Self::_exec(lua.clone(), source.clone(), name.clone());
+                }));
+                Ok(())
+            },
+            None => {
+                Self::_exec(self.lua.clone(), source, name)?;
+                Ok(())
             }
         }
     }
