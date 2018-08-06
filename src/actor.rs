@@ -209,11 +209,21 @@ impl Actor {
             }
         }
     }
-    pub fn _call(lua: Arc<Mutex<Lua>>, name: &str, args: LuaMessage) -> Result<LuaMessage, Error> {
+    fn _call(lua: Arc<Mutex<Lua>>, name: &str, args: LuaMessage) -> Result<LuaMessage, Error> {
         let vm = lua.lock().unwrap();
         let func: Function = vm.globals().get::<_, Function>(name)?;
 
         Ok(func.call::<_, LuaMessage>(args)?)
+    }
+    pub fn call_multi<'lua, A, R>(lua: &'lua Lua, name: &str, args: A) -> Result<R, Error>
+        where
+            A: ToLuaMulti<'lua> + Send + Sync + Clone + 'static,
+            R: FromLuaMulti<'lua>,
+    {
+        let vm = lua;
+        let func: Function = vm.globals().get::<_, Function>(name)?;
+
+        Ok(func.call::<_, R>(args)?)
     }
 }
 
