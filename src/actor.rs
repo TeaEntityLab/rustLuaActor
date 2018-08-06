@@ -115,25 +115,9 @@ impl Actor {
         Ok(globals.get::<_, LuaMessage>(key)?)
     }
 
-    pub fn load(&self, source: &'static str, name: Option<&'static str>) -> Result<(), Error> {
-        match self.handler.clone() {
-            Some(_handler) => {
-                let lua = self.lua.clone();
-                _handler.lock().unwrap().post(RawFunc::new(move ||{
-                    let lua = lua.clone();
-                    let _ = Self::_load(lua, source, name);
-                }));
-                Ok(())
-            },
-            None => {
-                Self::_load(self.lua.clone(), source, name)
-            }
-        }
-    }
-    fn _load(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<(), Error> {
-        let vm = lua.lock().unwrap();
-        vm.load(source, name)?;
-        Ok(())
+    pub fn load<'lua>(lua: &'lua Lua, source: &str, name: Option<&str>) -> Result<Function<'lua>, Error> {
+        let vm = lua;
+        Ok(vm.load(source, name)?)
     }
     // pub fn _load<'lua>(vm: &'lua Lua, source: &str, name: Option<&str>) -> Result<Function<'lua>, Error> {
     //     Ok(vm.load(source, name)?)
@@ -221,7 +205,7 @@ impl Actor {
         Ok(vm.eval(source, name)?)
     }
 
-    pub fn call(&self, name: String, args: LuaMessage) -> Result<LuaMessage, Error> {
+    pub fn call(&self, name: &'static str, args: LuaMessage) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
             Some(_handler) => {
                 let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
@@ -258,7 +242,7 @@ impl Actor {
             }
         }
     }
-    pub fn _call(lua: Arc<Mutex<Lua>>, name: String, args: LuaMessage) -> Result<LuaMessage, Error> {
+    pub fn _call(lua: Arc<Mutex<Lua>>, name: &str, args: LuaMessage) -> Result<LuaMessage, Error> {
         let vm = lua.lock().unwrap();
         let func: Function = vm.globals().get(name)?;
         Ok(func.call::<_, LuaMessage>(args)?)
@@ -269,15 +253,27 @@ impl Actor {
 fn test_actor_new() {
 
     fn test_actor(act: Actor) -> Result<(), Error> {
-        let _ = act.exec(r#"
+        act.exec(r#"
             i = 1
-        "#, None);
+        "#, None)?;
         assert_eq!(Some(1), Option::from(act.get_global("i".to_string())?));
 
         let v = act.eval(r#"
             3
         "#, None);
         assert_eq!(Some(3), Option::from(v?));
+
+        {
+            let vm = act.lua();
+            let vm = &*vm.lock().unwrap();
+            Actor::load(&vm, r#"
+                function test(i)
+                    return i + 1
+                end
+            "#, None)?;
+        }
+        assert_eq!(Some(2), Option::from(act.call("test", LuaMessage::from(1))?));
+        assert_eq!(Some(3), Option::from(act.call("test", LuaMessage::from(2))?));
 
         Ok(())
     }
