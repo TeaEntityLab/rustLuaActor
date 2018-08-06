@@ -41,18 +41,16 @@ impl Actor {
         self.lua.clone()
     }
     pub fn stop_handler(&self) {
-        match self.handler {
-            Some(ref _h) => _h.lock().unwrap().stop(),
-            None => {},
+        if let Some(ref _h) = self.handler {
+            _h.lock().unwrap().stop()
         }
     }
     fn start_handler(&self) {
-        match self.handler {
-            Some(ref _h) => _h.lock().unwrap().start(),
-            None => {},
+        if let Some(ref _h) = self.handler {
+            _h.lock().unwrap().start()
         }
     }
-    fn wait_async_lua_message_result(&self, _handler: Arc<Mutex<HandlerThread>>, func: impl FnOnce()->Result<LuaMessage, Error> + Send + Sync + 'static + Clone) -> Result<LuaMessage, Error> {
+    fn wait_async_lua_message_result(&self, _handler: &Arc<Mutex<HandlerThread>>, func: impl FnOnce()->Result<LuaMessage, Error> + Send + Sync + 'static + Clone) -> Result<LuaMessage, Error> {
         let func = Arc::new(Mutex::new(func));
 
         let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
@@ -89,9 +87,9 @@ impl Actor {
                 let lua = self.lua.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move ||{
                     let lua = lua.clone();
-                    let _ = Self::_set_global(lua, key.clone(), value.clone());
+                    let _ = Self::_set_global(lua, key, value.clone());
                 }));
-                return Ok(());
+                Ok(())
             },
             None => {
                 Self::_set_global(self.lua.clone(), key, value)
@@ -108,8 +106,8 @@ impl Actor {
         match self.handler.clone() {
             Some(_handler) => {
                 let lua = self.lua.clone();
-                self.wait_async_lua_message_result(_handler, move ||{
-                    Self::_get_global(lua, key.clone())
+                self.wait_async_lua_message_result(&_handler, move ||{
+                    Self::_get_global(lua, key)
                 })
             },
             None => {
@@ -152,8 +150,8 @@ impl Actor {
         match self.handler.clone() {
             Some(_handler) => {
                 let lua = self.lua.clone();
-                self.wait_async_lua_message_result(_handler, move ||{
-                    Self::_exec(lua, source.clone(), name.clone())
+                self.wait_async_lua_message_result(&_handler, move ||{
+                    Self::_exec(lua, source, name)
                 })
             },
             None => {
@@ -166,7 +164,7 @@ impl Actor {
             Some(_handler) => {
                 let lua = self.lua.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move ||{
-                    let _ = Self::_exec(lua.clone(), source.clone(), name.clone());
+                    let _ = Self::_exec(lua.clone(), source, name);
                 }));
                 Ok(())
             },
@@ -184,8 +182,8 @@ impl Actor {
         match self.handler.clone() {
             Some(_handler) => {
                 let lua = self.lua.clone();
-                self.wait_async_lua_message_result(_handler, move ||{
-                    Self::_eval(lua, source.clone(), name.clone())
+                self.wait_async_lua_message_result(&_handler, move ||{
+                    Self::_eval(lua, source, name)
                 })
             },
             None => {
@@ -202,8 +200,8 @@ impl Actor {
         match self.handler.clone() {
             Some(_handler) => {
                 let lua = self.lua.clone();
-                self.wait_async_lua_message_result(_handler, move ||{
-                    Self::_call(lua, name.clone(), args.clone())
+                self.wait_async_lua_message_result(&_handler, move ||{
+                    Self::_call(lua, name, args.clone())
                 })
             },
             None => {

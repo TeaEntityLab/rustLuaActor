@@ -45,10 +45,10 @@ impl From<LuaMessage> for Option<bool> {
                 None
             },
             LuaMessage::Table(_h) => {
-                Some(_h.len() > 0)
+                Some(!_h.is_empty())
             },
             LuaMessage::Array(_h) => {
-                Some(_h.len() > 0)
+                Some(!_h.is_empty())
             },
         }
     }
@@ -161,22 +161,22 @@ impl From<LuaMessage> for Option<HashMap<String, LuaMessage>> {
     fn from(s: LuaMessage) -> Self {
         match s {
             LuaMessage::String(s) => {
-                let mut h = HashMap::new();
+                let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(s));
                 Some(h)
             },
             LuaMessage::Integer(i) => {
-                let mut h = HashMap::new();
+                let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(i));
                 Some(h)
             },
             LuaMessage::Number(f) => {
-                let mut h = HashMap::new();
+                let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(f));
                 Some(h)
             },
             LuaMessage::Boolean(b) => {
-                let mut h = HashMap::new();
+                let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(b));
                 Some(h)
             },
@@ -187,7 +187,7 @@ impl From<LuaMessage> for Option<HashMap<String, LuaMessage>> {
                 Some(_h)
             },
             LuaMessage::Array(_h) => {
-                let mut new_one = HashMap::new();
+                let mut new_one = HashMap::default();
                 for (k, v) in _h.into_iter().enumerate() {
                     new_one.insert(k.to_string(), v);
                 }
@@ -221,7 +221,7 @@ impl From<LuaMessage> for Option<Vec<LuaMessage>> {
             },
             LuaMessage::Table(_h) => {
                 let mut new_one = vec!();
-                for (_k, v) in _h.into_iter() {
+                for (_k, v) in _h {
                     new_one.push(LuaMessage::from(_k));
                     new_one.push(v);
                 }
