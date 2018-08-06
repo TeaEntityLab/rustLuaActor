@@ -6,7 +6,7 @@ use fp_rust::{
     sync::{CountDownLatch},
     handler::{Handler,HandlerThread},
 };
-use rlua::{Lua,Error,Error::RuntimeError,Function,FromLuaMulti,ToLuaMulti,Variadic};
+use rlua::{Lua,Error,Error::RuntimeError,Function,FromLuaMulti,ToLuaMulti};
 use message::LuaMessage;
 
 #[derive(Clone)]
@@ -271,6 +271,8 @@ impl Actor {
 
 #[test]
 fn test_actor_new() {
+
+    use rlua::{Variadic};
 
     fn test_actor(act: Actor) {
         let _ = act.exec(r#"
