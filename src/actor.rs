@@ -216,7 +216,8 @@ fn test_actor_new() {
 
         act.exec(r#"
             function testit (i)
-                return i + 1
+                local Object = require("src.test")
+                return Object:calc1(i)
             end
         "#, None).ok().unwrap();
         match act.call("testit", LuaMessage::from(1)) {
