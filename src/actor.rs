@@ -46,6 +46,36 @@ impl Actor {
             None => {},
         }
     }
+    fn wait_async_lua_message_result(&self, _handler: Arc<Mutex<HandlerThread>>, func: impl FnOnce()->Result<LuaMessage, Error> + Send + Sync + 'static + Clone) -> Result<LuaMessage, Error> {
+        let func = Arc::new(Mutex::new(func));
+
+        let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
+        let result : Arc<Mutex<Result<LuaMessage, Error>>> = _result.clone();
+
+        let done_latch = CountDownLatch::new(1);
+
+        let done_latch2 = done_latch.clone();
+        _handler.lock().unwrap().post(RawFunc::new(move ||{
+            {
+                (*result.lock().unwrap()) = (func.lock().unwrap().clone())();
+            }
+            done_latch2.countdown();
+        }));
+
+        done_latch.wait();
+
+        {
+            let _result = &*_result.lock().unwrap();
+            match _result {
+                Ok(_result) => {
+                    Ok(_result.clone())
+                },
+                Err(_err) => {
+                    Err(_err.clone())
+                }
+            }
+        }
+    }
 
     pub fn set_global(&self, key: &'static str, value: LuaMessage) -> Result<(), Error> {
         match self.handler.clone() {
@@ -71,38 +101,10 @@ impl Actor {
     pub fn get_global(&self, key: &'static str) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
             Some(_handler) => {
-                let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
-                let result : Arc<Mutex<Result<LuaMessage, Error>>> = _result.clone();
                 let lua = self.lua.clone();
-
-                let done_latch = CountDownLatch::new(1);
-
-                let done_latch2 = done_latch.clone();
-                _handler.lock().unwrap().post(RawFunc::new(move ||{
-                    let lua = lua.clone();
-                    {
-                        let result = result.clone();
-
-                        {
-                            (*result.lock().unwrap()) = Self::_get_global(lua, key.clone());
-                        }
-                        done_latch2.countdown();
-                    }
-                }));
-
-                done_latch.wait();
-
-                {
-                    let _result = &*_result.lock().unwrap();
-                    match _result {
-                        Ok(_result) => {
-                            Ok(_result.clone())
-                        },
-                        Err(_err) => {
-                            Err(_err.clone())
-                        }
-                    }
-                }
+                self.wait_async_lua_message_result(_handler, move ||{
+                    Self::_get_global(lua, key.clone())
+                })
             },
             None => {
                 Self::_get_global(self.lua.clone(), key)
@@ -143,34 +145,10 @@ impl Actor {
     pub fn exec(&self, source: &'static str, name: Option<&'static str>) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
             Some(_handler) => {
-                let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
-                let result : Arc<Mutex<Result<LuaMessage, Error>>> = _result.clone();
                 let lua = self.lua.clone();
-
-                let done_latch = CountDownLatch::new(1);
-
-                let done_latch2 = done_latch.clone();
-                _handler.lock().unwrap().post(RawFunc::new(move ||{
-                    let lua = lua.clone();
-                    {
-                        (*result.lock().unwrap()) = Self::_exec(lua, source, name);
-                    }
-                    done_latch2.countdown();
-                }));
-
-                done_latch.wait();
-
-                {
-                    let _result = &*_result.lock().unwrap();
-                    match _result {
-                        Ok(_result) => {
-                            Ok(_result.clone())
-                        },
-                        Err(_err) => {
-                            Err(_err.clone())
-                        }
-                    }
-                }
+                self.wait_async_lua_message_result(_handler, move ||{
+                    Self::_exec(lua, source.clone(), name.clone())
+                })
             },
             None => {
                 Self::_exec(self.lua.clone(), source, name)
@@ -184,34 +162,10 @@ impl Actor {
     pub fn eval(&self, source: &'static str, name: Option<&'static str>) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
             Some(_handler) => {
-                let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
-                let result : Arc<Mutex<Result<LuaMessage, Error>>> = _result.clone();
                 let lua = self.lua.clone();
-
-                let done_latch = CountDownLatch::new(1);
-
-                let done_latch2 = done_latch.clone();
-                _handler.lock().unwrap().post(RawFunc::new(move ||{
-                    let lua = lua.clone();
-                    {
-                        (*result.lock().unwrap()) = Self::_eval(lua, source, name);
-                    }
-                    done_latch2.countdown();
-                }));
-
-                done_latch.wait();
-
-                {
-                    let _result = &*_result.lock().unwrap();
-                    match _result {
-                        Ok(_result) => {
-                            Ok(_result.clone())
-                        },
-                        Err(_err) => {
-                            Err(_err.clone())
-                        }
-                    }
-                }
+                self.wait_async_lua_message_result(_handler, move ||{
+                    Self::_eval(lua, source.clone(), name.clone())
+                })
             },
             None => {
                 Self::_eval(self.lua.clone(), source, name)
@@ -226,34 +180,10 @@ impl Actor {
     pub fn call(&self, name: &'static str, args: LuaMessage) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
             Some(_handler) => {
-                let _result : Arc<Mutex<Result<LuaMessage, Error>>> = Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
-                let result : Arc<Mutex<Result<LuaMessage, Error>>> = _result.clone();
                 let lua = self.lua.clone();
-
-                let done_latch = CountDownLatch::new(1);
-
-                let done_latch2 = done_latch.clone();
-                _handler.lock().unwrap().post(RawFunc::new(move ||{
-                    let lua = lua.clone();
-                    {
-                        (*result.lock().unwrap()) = Self::_call(lua, name.clone(), args.clone());
-                    }
-                    done_latch2.countdown();
-                }));
-
-                done_latch.wait();
-
-                {
-                    let _result = &*_result.lock().unwrap();
-                    match _result {
-                        Ok(_result) => {
-                            Ok(_result.clone())
-                        },
-                        Err(_err) => {
-                            Err(_err.clone())
-                        }
-                    }
-                }
+                self.wait_async_lua_message_result(_handler, move ||{
+                    Self::_call(lua, name.clone(), args.clone())
+                })
             },
             None => {
                 Self::_call(self.lua.clone(), name, args)
@@ -264,7 +194,6 @@ impl Actor {
         let vm = lua.lock().unwrap();
         let func: Function = vm.globals().get::<_, Function>(name)?;
 
-        println!("{:?}", 1234);
         Ok(func.call::<_, LuaMessage>(args)?)
     }
 }
