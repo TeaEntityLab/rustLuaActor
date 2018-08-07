@@ -43,8 +43,13 @@ impl Actor {
         actor
     }
 
+    #[inline]
     pub fn lua(&self) -> Arc<Mutex<Lua>> {
         self.lua.clone()
+    }
+    #[inline]
+    pub fn set_lua(&mut self, lua: Arc<Mutex<Lua>>) {
+        self.lua = lua;
     }
     #[inline]
     fn stop_handler(&self) {
