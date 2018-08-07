@@ -26,30 +26,16 @@ impl From<bool> for LuaMessage {
 impl From<LuaMessage> for Option<bool> {
     fn from(s: LuaMessage) -> Self {
         match s {
-            LuaMessage::String(s) => {
-                match s.parse::<bool>() {
-                    Ok(_x) => Some(_x),
-                    Err(_e) => None,
-                }
+            LuaMessage::String(s) => match s.parse::<bool>() {
+                Ok(_x) => Some(_x),
+                Err(_e) => None,
             },
-            LuaMessage::Integer(i) => {
-                Some(i > 0)
-            },
-            LuaMessage::Number(f) => {
-                Some(f > 0_f64)
-            },
-            LuaMessage::Boolean(b) => {
-                Some(b)
-            },
-            LuaMessage::Nil => {
-                None
-            },
-            LuaMessage::Table(_h) => {
-                Some(!_h.is_empty())
-            },
-            LuaMessage::Array(_h) => {
-                Some(!_h.is_empty())
-            },
+            LuaMessage::Integer(i) => Some(i > 0),
+            LuaMessage::Number(f) => Some(f > 0_f64),
+            LuaMessage::Boolean(b) => Some(b),
+            LuaMessage::Nil => None,
+            LuaMessage::Table(_h) => Some(!_h.is_empty()),
+            LuaMessage::Array(_h) => Some(!_h.is_empty()),
         }
     }
 }
@@ -67,27 +53,13 @@ impl From<String> for LuaMessage {
 impl From<LuaMessage> for Option<String> {
     fn from(s: LuaMessage) -> Self {
         match s {
-            LuaMessage::String(s) => {
-                Some(s)
-            },
-            LuaMessage::Integer(i) => {
-                Some(i.to_string())
-            },
-            LuaMessage::Number(f) => {
-                Some(f.to_string())
-            },
-            LuaMessage::Boolean(b) => {
-                Some(b.to_string())
-            },
-            LuaMessage::Nil => {
-                None
-            },
-            LuaMessage::Table(_h) => {
-                Some(format!("{:?}",_h))
-            },
-            LuaMessage::Array(_h) => {
-                Some(format!("{:?}",_h))
-            },
+            LuaMessage::String(s) => Some(s),
+            LuaMessage::Integer(i) => Some(i.to_string()),
+            LuaMessage::Number(f) => Some(f.to_string()),
+            LuaMessage::Boolean(b) => Some(b.to_string()),
+            LuaMessage::Nil => None,
+            LuaMessage::Table(_h) => Some(format!("{:?}", _h)),
+            LuaMessage::Array(_h) => Some(format!("{:?}", _h)),
         }
     }
 }
@@ -97,34 +69,22 @@ macro_rules! lua_message_number_convert {
         impl From<LuaMessage> for Option<$x> {
             fn from(s: LuaMessage) -> Self {
                 match s {
-                    LuaMessage::String(s) => {
-                        match s.parse::<$x>() {
-                            Ok(_x) => Some(_x),
-                            Err(_e) => None,
-                        }
+                    LuaMessage::String(s) => match s.parse::<$x>() {
+                        Ok(_x) => Some(_x),
+                        Err(_e) => None,
                     },
-                    LuaMessage::Integer(i) => {
-                        Some(i as $x)
-                    },
-                    LuaMessage::Number(f) => {
-                        Some(f as $x)
-                    },
+                    LuaMessage::Integer(i) => Some(i as $x),
+                    LuaMessage::Number(f) => Some(f as $x),
                     LuaMessage::Boolean(b) => {
                         if b {
                             Some(1 as $x)
                         } else {
                             Some(0 as $x)
                         }
-                    },
-                    LuaMessage::Nil => {
-                        None
-                    },
-                    LuaMessage::Table(_h) => {
-                        None
-                    },
-                    LuaMessage::Array(_h) => {
-                        None
-                    },
+                    }
+                    LuaMessage::Nil => None,
+                    LuaMessage::Table(_h) => None,
+                    LuaMessage::Array(_h) => None,
                 }
             }
         }
@@ -135,7 +95,7 @@ macro_rules! lua_message_convert_from_int {
     ($x:ty) => {
         impl From<$x> for LuaMessage {
             fn from(s: $x) -> Self {
-                LuaMessage::Integer(s as i64)
+                LuaMessage::Integer(<i64>::from(s))
             }
         }
         lua_message_number_convert!($x);
@@ -149,8 +109,20 @@ lua_message_convert_from_int!(u16);
 lua_message_convert_from_int!(i32);
 lua_message_convert_from_int!(u32);
 lua_message_convert_from_int!(i64);
-lua_message_convert_from_int!(usize);
-lua_message_convert_from_int!(isize);
+// lua_message_convert_from_int!(usize);
+impl From<usize> for LuaMessage {
+    fn from(s: usize) -> Self {
+        LuaMessage::Integer(s as i64)
+    }
+}
+lua_message_number_convert!(usize);
+// lua_message_convert_from_int!(isize);
+impl From<isize> for LuaMessage {
+    fn from(s: isize) -> Self {
+        LuaMessage::Integer(s as i64)
+    }
+}
+lua_message_number_convert!(isize);
 
 impl From<HashMap<String, LuaMessage>> for LuaMessage {
     fn from(s: HashMap<String, LuaMessage>) -> Self {
@@ -164,35 +136,31 @@ impl From<LuaMessage> for Option<HashMap<String, LuaMessage>> {
                 let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(s));
                 Some(h)
-            },
+            }
             LuaMessage::Integer(i) => {
                 let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(i));
                 Some(h)
-            },
+            }
             LuaMessage::Number(f) => {
                 let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(f));
                 Some(h)
-            },
+            }
             LuaMessage::Boolean(b) => {
                 let mut h = HashMap::default();
                 h.insert("x".to_string(), LuaMessage::from(b));
                 Some(h)
-            },
-            LuaMessage::Nil => {
-                None
-            },
-            LuaMessage::Table(_h) => {
-                Some(_h)
-            },
+            }
+            LuaMessage::Nil => None,
+            LuaMessage::Table(_h) => Some(_h),
             LuaMessage::Array(_h) => {
                 let mut new_one = HashMap::default();
                 for (k, v) in _h.into_iter().enumerate() {
                     new_one.insert(k.to_string(), v);
                 }
                 Some(new_one)
-            },
+            }
         }
     }
 }
@@ -204,32 +172,20 @@ impl From<Vec<LuaMessage>> for LuaMessage {
 impl From<LuaMessage> for Option<Vec<LuaMessage>> {
     fn from(s: LuaMessage) -> Self {
         match s {
-            LuaMessage::String(s) => {
-                Some(vec!(LuaMessage::from(s)))
-            },
-            LuaMessage::Integer(i) => {
-                Some(vec!(LuaMessage::from(i)))
-            },
-            LuaMessage::Number(f) => {
-                Some(vec!(LuaMessage::from(f)))
-            },
-            LuaMessage::Boolean(b) => {
-                Some(vec!(LuaMessage::from(b)))
-            },
-            LuaMessage::Nil => {
-                None
-            },
+            LuaMessage::String(s) => Some(vec![LuaMessage::from(s)]),
+            LuaMessage::Integer(i) => Some(vec![LuaMessage::from(i)]),
+            LuaMessage::Number(f) => Some(vec![LuaMessage::from(f)]),
+            LuaMessage::Boolean(b) => Some(vec![LuaMessage::from(b)]),
+            LuaMessage::Nil => None,
             LuaMessage::Table(_h) => {
-                let mut new_one = vec!();
+                let mut new_one = vec![];
                 for (_k, v) in _h {
                     new_one.push(LuaMessage::from(_k));
                     new_one.push(v);
                 }
                 Some(new_one)
-            },
-            LuaMessage::Array(_h) => {
-                Some(_h)
-            },
+            }
+            LuaMessage::Array(_h) => Some(_h),
         }
     }
 }
@@ -258,13 +214,14 @@ impl<'lua> FromLua<'lua> for LuaMessage {
             Value::Nil => Ok(LuaMessage::Nil),
             Value::Table(t) => {
                 if t.len()? > 0
-                && t.clone().pairs::<i32, LuaMessage>().count() == t.clone().sequence_values::<LuaMessage>().count()
+                    && t.clone().pairs::<i32, LuaMessage>().count()
+                        == t.clone().sequence_values::<LuaMessage>().count()
                 {
                     Ok(LuaMessage::Array(Vec::from_lua(Value::Table(t), lua)?))
                 } else {
                     Ok(LuaMessage::Table(HashMap::from_lua(Value::Table(t), lua)?))
                 }
-            },
+            }
 
             _ => unimplemented!(),
         }
@@ -281,7 +238,6 @@ impl<'lua> ToLua<'lua> for LuaMessage {
             LuaMessage::Nil => Ok(Value::Nil),
             LuaMessage::Table(x) => Ok(Value::Table(lua.create_table_from(x)?)),
             LuaMessage::Array(x) => Ok(Value::Table(lua.create_sequence_from(x)?)),
-
             // You should not create RPCNotifyLater from outside of lua
             // _ => unimplemented!(),
         }
@@ -356,10 +312,10 @@ mod tests {
             discriminant(&LuaMessage::Number(42.5))
         );
         assert_eq!(
-            discriminant(&LuaMessage::from_lua(
-                Value::String(lua.create_string("foo").unwrap()),
-                &lua
-            ).unwrap()),
+            discriminant(
+                &LuaMessage::from_lua(Value::String(lua.create_string("foo").unwrap()), &lua)
+                    .unwrap()
+            ),
             discriminant(&LuaMessage::String("foo".to_string()))
         );
         assert_eq!(
@@ -380,11 +336,15 @@ mod tests {
             discriminant(&LuaMessage::Table(t))
         );
 
-        let t = vec!(LuaMessage::from(1),LuaMessage::from(2));
+        let t = vec![LuaMessage::from(1), LuaMessage::from(2)];
         assert_eq!(
             discriminant(
                 &LuaMessage::from_lua(
-                    Value::Table(lua.create_sequence_from(vec!(LuaMessage::from(1),LuaMessage::from(2))).unwrap()), &lua
+                    Value::Table(
+                        lua.create_sequence_from(vec!(LuaMessage::from(1), LuaMessage::from(2)))
+                            .unwrap()
+                    ),
+                    &lua
                 ).unwrap()
             ),
             discriminant(&LuaMessage::Array(t.clone()))
