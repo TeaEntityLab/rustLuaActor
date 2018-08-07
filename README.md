@@ -1,7 +1,7 @@
 # rustLuaActor
 
 [![tag](https://img.shields.io/github/tag/TeaEntityLab/rustLuaActor.svg)](https://github.com/TeaEntityLab/rustLuaActor)
-[![Crates.io](https://img.shields.io/crates/d/fp_rust.svg)](https://crates.io/crates/lua_actor)
+[![Crates.io](https://img.shields.io/crates/d/lua_actor.svg)](https://crates.io/crates/lua_actor)
 [![Travis CI Build Status](https://api.travis-ci.org/TeaEntityLab/rustLuaActor.svg?branch=master)](https://travis-ci.org/TeaEntityLab/rustLuaActor)
 [![docs](https://img.shields.io/badge/docs-online-5023dd.svg)](https://docs.rs/lua_actor/)
 
