@@ -1,5 +1,5 @@
 /*!
-Credits(mainly, except Array & reverse convertions):
+Credits(mainly, except Array & reverse conversions):
 https://github.com/poga/actix-lua/blob/master/src/message.rs
 */
 
