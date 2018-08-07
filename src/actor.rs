@@ -24,6 +24,12 @@ impl Default for Actor {
     }
 }
 
+impl Drop for Actor {
+    fn drop(&mut self) {
+        self.stop_handler();
+    }
+}
+
 impl Actor {
     pub fn new() -> Actor {
         let actor: Actor = Default::default();
@@ -40,16 +46,19 @@ impl Actor {
     pub fn lua(&self) -> Arc<Mutex<Lua>> {
         self.lua.clone()
     }
-    pub fn stop_handler(&self) {
+    #[inline]
+    fn stop_handler(&self) {
         if let Some(ref _h) = self.handler {
             _h.lock().unwrap().stop()
         }
     }
+    #[inline]
     fn start_handler(&self) {
         if let Some(ref _h) = self.handler {
             _h.lock().unwrap().start()
         }
     }
+    #[inline]
     fn wait_async_lua_message_result(&self, _handler: &Arc<Mutex<HandlerThread>>, func: impl FnOnce()->Result<LuaMessage, Error> + Send + Sync + 'static + Clone) -> Result<LuaMessage, Error> {
         let func = Arc::new(Mutex::new(func));
 
@@ -96,6 +105,7 @@ impl Actor {
             }
         }
     }
+    #[inline]
     fn _set_global(lua: Arc<Mutex<Lua>>, key: &str, value: LuaMessage) -> Result<(), Error> {
         let vm = lua.lock().unwrap();
         let globals = vm.globals();
@@ -115,11 +125,18 @@ impl Actor {
             },
         }
     }
+    #[inline]
     fn _get_global(lua: Arc<Mutex<Lua>>, key: &str) -> Result<LuaMessage, Error> {
         let vm = lua.lock().unwrap();
         let globals = vm.globals();
         Ok(globals.get::<_, LuaMessage>(key)?)
     }
+    #[inline]
+    fn _get_global_function<'lua>(lua: &'lua Lua, key: &str) -> Result<Function<'lua>, Error> {
+        Ok(lua.globals().get::<_, Function<'lua>>(key)?)
+    }
+
+    #[inline]
     pub fn def_fn<'lua, 'callback, F, A, R>(lua: &'lua Lua, func: F) -> Result<Function<'lua>, Error>
         where
             A: FromLuaMulti<'callback>,
@@ -128,24 +145,61 @@ impl Actor {
     {
         Ok(lua.create_function(func)?)
     }
+    #[inline]
     pub fn def_fn_with_name<'lua, 'callback, F, A, R>(lua: &'lua Lua, func: F, key: &str) -> Result<Function<'lua>, Error>
         where
             A: FromLuaMulti<'callback>,
             R: ToLuaMulti<'callback>,
             F: 'static + Send + Fn(&'callback Lua, A) -> Result<R, Error>
     {
-        let def = lua.create_function(func)?;
+        let def = Self::def_fn(lua, func)?;
         lua.globals().set(key, def)?;
-        Ok(lua.globals().get::<_, Function<'lua>>(key)?)
+        Ok(Self::_get_global_function(lua, key)?)
     }
+    pub fn def_fn_with_name_nowait<'callback, F, A, R>(&self, func: F, key: &'static str) -> Result<(), Error>
+        where
+            A: FromLuaMulti<'callback>,
+            R: ToLuaMulti<'callback>,
+            F: 'static + Clone + Send + Sync + Fn(&'callback Lua, A) -> Result<R, Error>
+    {
+        match self.handler.clone() {
+            Some(_handler) => {
+                let lua = self.lua.clone();
+                _handler.lock().unwrap().post(RawFunc::new(move ||{
+                    let lua = lua.lock().unwrap();
+                    let _ = Self::def_fn_with_name(&lua, func.clone(), key);
+                }));
+            },
+            None => {
+                let lua = self.lua.lock().unwrap();
+                Self::def_fn_with_name(&lua, func.clone(), key)?;
+            },
+        }
 
+        Ok(())
+    }
+    #[inline]
     pub fn load<'lua>(lua: &'lua Lua, source: &str, name: Option<&str>) -> Result<Function<'lua>, Error> {
         let vm = lua;
         Ok(vm.load(source, name)?)
     }
-    // pub fn _load<'lua>(vm: &'lua Lua, source: &str, name: Option<&str>) -> Result<Function<'lua>, Error> {
-    //     Ok(vm.load(source, name)?)
-    // }
+    pub fn load_nowait(&self, source: &'static str, name: Option<&'static str>) -> Result<(), Error> {
+        match self.handler.clone() {
+            Some(_handler) => {
+                let lua = self.lua.clone();
+                _handler.lock().unwrap().post(RawFunc::new(move ||{
+                    let lua = lua.lock().unwrap();
+                    let _ = Self::load(&lua, source, name);
+                }));
+            },
+            None => {
+                let lua = self.lua.lock().unwrap();
+                Self::load(&lua, source, name)?;
+            },
+        }
+
+        Ok(())
+    }
     pub fn exec(&self, source: &'static str, name: Option<&'static str>) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
             Some(_handler) => {
@@ -166,16 +220,25 @@ impl Actor {
                 _handler.lock().unwrap().post(RawFunc::new(move ||{
                     let _ = Self::_exec(lua.clone(), source, name);
                 }));
-                Ok(())
             },
             None => {
                 Self::_exec(self.lua.clone(), source, name)?;
-                Ok(())
             }
         }
+
+        Ok(())
     }
+    #[inline]
     fn _exec(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<LuaMessage, Error> {
         let vm = lua.lock().unwrap();
+        Ok(vm.exec(source, name)?)
+    }
+    #[inline]
+    pub fn exec_multi<'lua, R>(lua: &'lua Lua, source: &str, name: Option<&str>) -> Result<R, Error>
+        where
+            R: FromLuaMulti<'lua>,
+    {
+        let vm = lua;
         Ok(vm.exec(source, name)?)
     }
     pub fn eval(&self, source: &'static str, name: Option<&'static str>) -> Result<LuaMessage, Error> {
@@ -191,8 +254,17 @@ impl Actor {
             }
         }
     }
+    #[inline]
     fn _eval(lua: Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<LuaMessage, Error> {
         let vm = lua.lock().unwrap();
+        Ok(vm.eval(source, name)?)
+    }
+    #[inline]
+    pub fn eval_multi<'lua, R>(lua: &'lua Lua, source: &str, name: Option<&str>) -> Result<R, Error>
+        where
+            R: FromLuaMulti<'lua>,
+    {
+        let vm = lua;
         Ok(vm.eval(source, name)?)
     }
 
@@ -209,12 +281,28 @@ impl Actor {
             }
         }
     }
+    pub fn call_nowait(&self, name: &'static str, args: LuaMessage) -> Result<(), Error> {
+        match self.handler.clone() {
+            Some(_handler) => {
+                let lua = self.lua.clone();
+                _handler.lock().unwrap().post(RawFunc::new(move ||{
+                    let _ = Self::_call(lua.clone(), name, args.clone());
+                }));
+            },
+            None => {
+                Self::_call(self.lua.clone(), name, args)?;
+            }
+        }
+        Ok(())
+    }
+    #[inline]
     fn _call(lua: Arc<Mutex<Lua>>, name: &str, args: LuaMessage) -> Result<LuaMessage, Error> {
         let vm = lua.lock().unwrap();
         let func: Function = vm.globals().get::<_, Function>(name)?;
 
         Ok(func.call::<_, LuaMessage>(args)?)
     }
+    #[inline]
     pub fn call_multi<'lua, A, R>(lua: &'lua Lua, name: &str, args: A) -> Result<R, Error>
         where
             A: ToLuaMulti<'lua> + Send + Sync + Clone + 'static,
@@ -233,7 +321,7 @@ fn test_actor_new() {
     use rlua::{Variadic};
 
     fn test_actor(act: Actor) {
-        let _ = act.exec(r#"
+        let _ = act.exec_nowait(r#"
             i = 1
         "#, None);
         assert_eq!(Some(1), Option::from(act.get_global("i").ok().unwrap()));
