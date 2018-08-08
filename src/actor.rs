@@ -6,7 +6,7 @@ use fp_rust::{
     sync::{CountDownLatch, Will, WillAsync},
 };
 use message::LuaMessage;
-use rlua::{Error, FromLuaMulti, Function, Lua, ToLuaMulti};
+use rlua::{Error, FromLua, FromLuaMulti, Function, Lua, Table, ToLua, ToLuaMulti};
 
 #[derive(Clone)]
 pub struct Actor {
@@ -115,14 +115,24 @@ impl Actor {
         }
     }
     #[inline]
-    fn _get_global(lua: &Arc<Mutex<Lua>>, key: &str) -> Result<LuaMessage, Error> {
-        let vm = lua.lock().unwrap();
-        let globals = vm.globals();
-        Ok(globals.get::<_, LuaMessage>(key)?)
+    pub fn get_global_raw<'lua, K: ToLua<'lua>, V: FromLua<'lua>>(
+        lua: &'lua Lua,
+        key: K,
+    ) -> Result<V, Error> {
+        lua.globals().get::<_, V>(key)
     }
     #[inline]
-    fn _get_global_function<'lua>(lua: &'lua Lua, key: &str) -> Result<Function<'lua>, Error> {
-        Ok(lua.globals().get::<_, Function<'lua>>(key)?)
+    pub fn get_global_function<'lua>(lua: &'lua Lua, key: &str) -> Result<Function<'lua>, Error> {
+        Self::get_global_raw::<_, Function<'lua>>(lua, key)
+    }
+    #[inline]
+    pub fn get_global_table<'lua>(lua: &'lua Lua, key: &str) -> Result<Table<'lua>, Error> {
+        Self::get_global_raw::<_, Table<'lua>>(lua, key)
+    }
+    #[inline]
+    fn _get_global(lua: &Arc<Mutex<Lua>>, key: &str) -> Result<LuaMessage, Error> {
+        let vm = lua.lock().unwrap();
+        Self::get_global_raw::<_, LuaMessage>(&vm, key)
     }
 
     #[inline]
@@ -135,7 +145,7 @@ impl Actor {
         R: ToLuaMulti<'callback>,
         F: 'static + Send + Fn(&'callback Lua, A) -> Result<R, Error>,
     {
-        Ok(lua.create_function(func)?)
+        lua.create_function(func)
     }
     #[inline]
     pub fn def_fn_with_name<'lua, 'callback, F, A, R>(
@@ -150,7 +160,7 @@ impl Actor {
     {
         let def = Self::def_fn(lua, func)?;
         lua.globals().set(key, def)?;
-        Ok(Self::_get_global_function(lua, key)?)
+        Self::get_global_function(lua, key)
     }
     pub fn def_fn_with_name_nowait<'callback, F, A, R>(
         &self,
@@ -184,8 +194,7 @@ impl Actor {
         source: &str,
         name: Option<&str>,
     ) -> Result<Function<'lua>, Error> {
-        let vm = lua;
-        Ok(vm.load(source, name)?)
+        lua.load(source, name)
     }
     pub fn load_nowait(
         &self,
@@ -244,16 +253,14 @@ impl Actor {
     }
     #[inline]
     fn _exec(lua: &Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<LuaMessage, Error> {
-        let vm = lua.lock().unwrap();
-        Ok(vm.exec(source, name)?)
+        lua.lock().unwrap().exec(source, name)
     }
     #[inline]
     pub fn exec_multi<'lua, R>(lua: &'lua Lua, source: &str, name: Option<&str>) -> Result<R, Error>
     where
         R: FromLuaMulti<'lua>,
     {
-        let vm = lua;
-        Ok(vm.exec(source, name)?)
+        lua.exec(source, name)
     }
     pub fn eval(
         &self,
@@ -272,16 +279,14 @@ impl Actor {
     }
     #[inline]
     fn _eval(lua: &Arc<Mutex<Lua>>, source: &str, name: Option<&str>) -> Result<LuaMessage, Error> {
-        let vm = lua.lock().unwrap();
-        Ok(vm.eval(source, name)?)
+        lua.lock().unwrap().eval(source, name)
     }
     #[inline]
     pub fn eval_multi<'lua, R>(lua: &'lua Lua, source: &str, name: Option<&str>) -> Result<R, Error>
     where
         R: FromLuaMulti<'lua>,
     {
-        let vm = lua;
-        Ok(vm.eval(source, name)?)
+        lua.eval(source, name)
     }
 
     pub fn call(&self, name: &'static str, args: LuaMessage) -> Result<LuaMessage, Error> {
@@ -314,7 +319,7 @@ impl Actor {
         let vm = lua.lock().unwrap();
         let func: Function = vm.globals().get::<_, Function>(name)?;
 
-        Ok(func.call::<_, LuaMessage>(args)?)
+        func.call::<_, LuaMessage>(args)
     }
     #[inline]
     pub fn call_multi<'lua, A, R>(lua: &'lua Lua, name: &str, args: A) -> Result<R, Error>
@@ -322,10 +327,9 @@ impl Actor {
         A: ToLuaMulti<'lua> + Send + Sync + Clone + 'static,
         R: FromLuaMulti<'lua>,
     {
-        let vm = lua;
-        let func: Function = vm.globals().get::<_, Function>(name)?;
+        let func: Function = lua.globals().get::<_, Function>(name)?;
 
-        Ok(func.call::<_, R>(args)?)
+        func.call::<_, R>(args)
     }
 }
 
