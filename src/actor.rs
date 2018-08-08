@@ -1,12 +1,12 @@
 use std::sync::{Arc, Mutex};
 
 use fp_rust::{
-    common::RawFunc,
+    common::{RawFunc, SubscriptionFunc},
     handler::{Handler, HandlerThread},
-    sync::CountDownLatch,
+    sync::{CountDownLatch, Will, WillAsync},
 };
 use message::LuaMessage;
-use rlua::{Error, Error::RuntimeError, FromLuaMulti, Function, Lua, ToLuaMulti};
+use rlua::{Error, FromLuaMulti, Function, Lua, ToLuaMulti};
 
 #[derive(Clone)]
 pub struct Actor {
@@ -70,29 +70,18 @@ impl Actor {
     ) -> Result<LuaMessage, Error> {
         let func = Arc::new(Mutex::new(func));
 
-        let _result: Arc<Mutex<Result<LuaMessage, Error>>> =
-            Arc::new(Mutex::new(Err(RuntimeError(String::from("")))));
-        let result: Arc<Mutex<Result<LuaMessage, Error>>> = _result.clone();
-
         let done_latch = CountDownLatch::new(1);
-
         let done_latch2 = done_latch.clone();
-        _handler.lock().unwrap().post(RawFunc::new(move || {
-            {
-                (*result.lock().unwrap()) = (func.lock().unwrap().clone())();
-            }
-            done_latch2.countdown();
-        }));
 
+        let mut will =
+            WillAsync::new_with_handler(move || (func.lock().unwrap().clone())(), _handler.clone());
+        will.add_callback(Arc::new(Mutex::new(SubscriptionFunc::new(move |_| {
+            done_latch2.countdown();
+        }))));
+        will.start();
         done_latch.wait();
 
-        {
-            let _result = &*_result.lock().unwrap();
-            match _result {
-                Ok(_result) => Ok(_result.clone()),
-                Err(_err) => Err(_err.clone()),
-            }
-        }
+        will.result().unwrap()
     }
 
     pub fn set_global(&self, key: &'static str, value: LuaMessage) -> Result<(), Error> {
