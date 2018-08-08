@@ -90,19 +90,20 @@ impl Actor {
                 let lua = self.lua.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move || {
                     let lua = lua.clone();
-                    let _ = Self::_set_global(&lua, key, value.clone());
+                    let _ = Self::set_global_raw(&lua.lock().unwrap(), key, value.clone());
                 }));
                 Ok(())
             }
-            None => Self::_set_global(&self.lua.clone(), key, value),
+            None => Self::set_global_raw(&self.lua.lock().unwrap(), key, value),
         }
     }
     #[inline]
-    fn _set_global(lua: &Arc<Mutex<Lua>>, key: &str, value: LuaMessage) -> Result<(), Error> {
-        let vm = lua.lock().unwrap();
-        let globals = vm.globals();
-        globals.set(key, value)?;
-        Ok(())
+    pub fn set_global_raw<'lua, K: ToLua<'lua>, V: ToLua<'lua>>(
+        lua: &'lua Lua,
+        key: K,
+        value: V,
+    ) -> Result<(), Error> {
+        lua.globals().set::<_, V>(key, value)
     }
 
     pub fn get_global(&self, key: &'static str) -> Result<LuaMessage, Error> {
@@ -150,6 +151,7 @@ impl Actor {
     #[inline]
     pub fn def_fn_with_name<'lua, 'callback, F, A, R>(
         lua: &'lua Lua,
+        table: Table<'lua>,
         func: F,
         key: &str,
     ) -> Result<Function<'lua>, Error>
@@ -159,8 +161,8 @@ impl Actor {
         F: 'static + Send + Fn(&'callback Lua, A) -> Result<R, Error>,
     {
         let def = Self::def_fn(lua, func)?;
-        lua.globals().set(key, def)?;
-        Self::get_global_function(lua, key)
+        table.set(key, def)?;
+        table.get(key)
     }
     pub fn def_fn_with_name_nowait<'callback, F, A, R>(
         &self,
@@ -177,12 +179,12 @@ impl Actor {
                 let lua = self.lua.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move || {
                     let lua = lua.lock().unwrap();
-                    let _ = Self::def_fn_with_name(&lua, func.clone(), key);
+                    let _ = Self::def_fn_with_name(&lua, lua.globals(), func.clone(), key);
                 }));
             }
             None => {
                 let lua = self.lua.lock().unwrap();
-                Self::def_fn_with_name(&lua, func.clone(), key)?;
+                Self::def_fn_with_name(&lua, lua.globals(), func.clone(), key)?;
             }
         }
 
@@ -375,16 +377,13 @@ fn test_actor_new() {
         }
 
         {
-            let vm = act.lua();
-            let vm = vm.lock().unwrap();
-            Actor::def_fn_with_name(&vm, |_, (list1, list2): (Vec<String>, Vec<String>)| {
+            act.def_fn_with_name_nowait(|_, (list1, list2): (Vec<String>, Vec<String>)| {
                 // This function just checks whether two string lists are equal, and in an inefficient way.
                 // Lua callbacks return `rlua::Result`, an Ok value is a normal return, and an Err return
                 // turns into a Lua 'error'.  Again, any type that is convertible to lua may be returned.
                 Ok(list1 == list2)
             }, "check_equal").ok().unwrap();
-            Actor::def_fn_with_name(
-                &vm,
+            act.def_fn_with_name_nowait(
                 |_, strings: Variadic<String>| {
                     // (This is quadratic!, it's just an example!)
                     Ok(strings.iter().fold("".to_owned(), |a, b| a + b))
@@ -393,20 +392,23 @@ fn test_actor_new() {
             ).ok()
             .unwrap();
             assert_eq!(
-                vm.eval::<bool>(r#"check_equal({"a", "b", "c"}, {"a", "b", "c"})"#, None)
-                    .ok()
-                    .unwrap(),
+                Option::<bool>::from(
+                    act.eval(r#"check_equal({"a", "b", "c"}, {"a", "b", "c"})"#, None)
+                        .ok()
+                        .unwrap()
+                ).unwrap(),
                 true
             );
             assert_eq!(
-                vm.eval::<bool>(r#"check_equal({"a", "b", "c"}, {"d", "e", "f"})"#, None)
-                    .ok()
-                    .unwrap(),
+                Option::<bool>::from(
+                    act.eval(r#"check_equal({"a", "b", "c"}, {"d", "e", "f"})"#, None)
+                        .ok()
+                        .unwrap()
+                ).unwrap(),
                 false
             );
             assert_eq!(
-                vm.eval::<String>(r#"join("a", "b", "c")"#, None)
-                    .ok()
+                Option::<String>::from(act.eval(r#"join("a", "b", "c")"#, None).ok().unwrap())
                     .unwrap(),
                 "abc"
             );

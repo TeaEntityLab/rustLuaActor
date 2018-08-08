@@ -57,63 +57,88 @@ extern crate lua_actor;
 
 fn main() {
 
-  use fp_rust::handler::{
-      HandlerThread,
-  };
   use rlua::{Variadic};
   use lua_actor::{actor::Actor, message::LuaMessage};
 
+
   fn test_actor(act: Actor) {
-      let _ = act.exec_nowait(r#"
+      let _ = act.exec_nowait(
+          r#"
           i = 1
-      "#, None);
+      "#,
+          None,
+      );
       assert_eq!(Some(1), Option::from(act.get_global("i").ok().unwrap()));
 
-      let v = act.eval(r#"
+      let v = act.eval(
+          r#"
           3
-      "#, None);
+      "#,
+          None,
+      );
       assert_eq!(Some(3), Option::from(v.ok().unwrap()));
 
-      act.exec(r#"
+      act.exec(
+          r#"
           function testit (i)
               return i + 1
           end
-      "#, None).ok().unwrap();
+      "#,
+          None,
+      ).ok().unwrap();
       match act.call("testit", LuaMessage::from(1)) {
           Ok(_v) => {
               assert_eq!(Some(2), Option::from(_v));
-          },
+          }
           Err(_err) => {
               println!("{:?}", _err);
               panic!(_err);
-          },
+          }
       }
 
       {
-          let vm = act.lua();
-          let vm = vm.lock().unwrap();
-          Actor::def_fn_with_name(&vm, |_, (list1, list2): (Vec<String>, Vec<String>)| {
+          act.def_fn_with_name_nowait(|_, (list1, list2): (Vec<String>, Vec<String>)| {
               // This function just checks whether two string lists are equal, and in an inefficient way.
               // Lua callbacks return `rlua::Result`, an Ok value is a normal return, and an Err return
               // turns into a Lua 'error'.  Again, any type that is convertible to lua may be returned.
               Ok(list1 == list2)
           }, "check_equal").ok().unwrap();
-          Actor::def_fn_with_name(&vm, |_, strings: Variadic<String>| {
-              // (This is quadratic!, it's just an example!)
-              Ok(strings.iter().fold("".to_owned(), |a, b| a + b))
-          }, "join").ok().unwrap();
+          act.def_fn_with_name_nowait(
+              |_, strings: Variadic<String>| {
+                  // (This is quadratic!, it's just an example!)
+                  Ok(strings.iter().fold("".to_owned(), |a, b| a + b))
+              },
+              "join",
+          ).ok()
+          .unwrap();
           assert_eq!(
-              vm.eval::<bool>(r#"check_equal({"a", "b", "c"}, {"a", "b", "c"})"#, None).ok().unwrap(),
+              Option::<bool>::from(
+                  act.eval(r#"check_equal({"a", "b", "c"}, {"a", "b", "c"})"#, None)
+                      .ok()
+                      .unwrap()
+              ).unwrap(),
               true
           );
           assert_eq!(
-              vm.eval::<bool>(r#"check_equal({"a", "b", "c"}, {"d", "e", "f"})"#, None).ok().unwrap(),
+              Option::<bool>::from(
+                  act.eval(r#"check_equal({"a", "b", "c"}, {"d", "e", "f"})"#, None)
+                      .ok()
+                      .unwrap()
+              ).unwrap(),
               false
           );
-          assert_eq!(vm.eval::<String>(r#"join("a", "b", "c")"#, None).ok().unwrap(), "abc");
+          assert_eq!(
+              Option::<String>::from(act.eval(r#"join("a", "b", "c")"#, None).ok().unwrap())
+                  .unwrap(),
+              "abc"
+          );
       }
 
-      act.set_global("arr1", LuaMessage::from(vec!(LuaMessage::from(1), LuaMessage::from(2)))).ok().unwrap();
+      act.set_global(
+          "arr1",
+          LuaMessage::from(vec![LuaMessage::from(1), LuaMessage::from(2)]),
+      ).ok()
+      .unwrap();
 
       let v = Option::<Vec<LuaMessage>>::from(act.get_global("arr1").ok().unwrap());
       assert_eq!(LuaMessage::from(1), v.clone().unwrap()[0]);
@@ -122,7 +147,6 @@ fn main() {
   }
 
   let _ = test_actor(Actor::new_with_handler(None));
-  let _ = test_actor(Actor::new_with_handler(Some(HandlerThread::new_with_mutex())));
   let _ = test_actor(Actor::new());
 }
 
