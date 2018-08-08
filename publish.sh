@@ -1,1 +1,1 @@
-cargo publish && git push && git push --tag
+cargo publish && git push --tag
