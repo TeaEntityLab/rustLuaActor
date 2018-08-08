@@ -151,7 +151,7 @@ impl Actor {
     #[inline]
     pub fn def_fn_with_name<'lua, 'callback, F, A, R>(
         lua: &'lua Lua,
-        table: Table<'lua>,
+        table: &Table<'lua>,
         func: F,
         key: &str,
     ) -> Result<Function<'lua>, Error>
@@ -179,12 +179,12 @@ impl Actor {
                 let lua = self.lua.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move || {
                     let lua = lua.lock().unwrap();
-                    let _ = Self::def_fn_with_name(&lua, lua.globals(), func.clone(), key);
+                    let _ = Self::def_fn_with_name(&lua, &lua.globals(), func.clone(), key);
                 }));
             }
             None => {
                 let lua = self.lua.lock().unwrap();
-                Self::def_fn_with_name(&lua, lua.globals(), func.clone(), key)?;
+                Self::def_fn_with_name(&lua, &lua.globals(), func.clone(), key)?;
             }
         }
 
