@@ -25,7 +25,7 @@ impl Default for Actor {
 
 impl Drop for Actor {
     fn drop(&mut self) {
-        self.stop_handler();
+        // self.stop_handler();
     }
 }
 
@@ -51,7 +51,7 @@ impl Actor {
         self.lua = lua;
     }
     #[inline]
-    fn stop_handler(&self) {
+    pub fn stop_handler(&self) {
         if let Some(ref _h) = self.handler {
             _h.lock().unwrap().stop()
         }
