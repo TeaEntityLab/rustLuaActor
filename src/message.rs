@@ -3,9 +3,11 @@ Credits(mainly, except Array & reverse conversions):
 https://github.com/poga/actix-lua/blob/master/src/message.rs
 */
 
-use rlua::Result as LuaResult;
-use rlua::{Context, FromLua, ToLua, Value};
 use std::collections::HashMap;
+use std::iter::FromIterator;
+
+use rlua::Result as LuaResult;
+use rlua::{Context, FromLua, ToLua, Value, Variadic};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LuaMessage {
@@ -61,6 +63,22 @@ impl From<LuaMessage> for Option<String> {
             LuaMessage::Table(_h) => Some(format!("{:?}", _h)),
             LuaMessage::Array(_h) => Some(format!("{:?}", _h)),
         }
+    }
+}
+
+impl From<Variadic<LuaMessage>> for LuaMessage {
+    fn from(s: Variadic<LuaMessage>) -> Self {
+        LuaMessage::from(
+            s.into_iter()
+                .map(|v| LuaMessage::from(v.clone()))
+                .collect::<Vec<LuaMessage>>(),
+        )
+    }
+}
+
+impl Into<Variadic<LuaMessage>> for LuaMessage {
+    fn into(self) -> Variadic<LuaMessage> {
+        return Variadic::from_iter([self]);
     }
 }
 
