@@ -5,10 +5,8 @@ use fp_rust::{
     handler::{Handler, HandlerThread},
     sync::{CountDownLatch, Will, WillAsync},
 };
-use message::LuaMessage;
-use rlua::{
-    Chunk, Context, Error, FromLua, FromLuaMulti, Function, Lua, Table, ToLua, ToLuaMulti, Variadic,
-};
+use message::{LuaMessage, MultiLuaMessage};
+use rlua::{Chunk, Context, Error, FromLua, FromLuaMulti, Function, Lua, Table, ToLua, ToLuaMulti};
 
 #[derive(Clone)]
 pub struct Actor {
@@ -284,79 +282,36 @@ impl Actor {
         lua.load(source).eval()
     }
 
-    pub fn call_one(&self, name: &'static str, args: LuaMessage) -> Result<LuaMessage, Error> {
+    pub fn call(&self, name: &'static str, args: MultiLuaMessage) -> Result<LuaMessage, Error> {
         match self.handler.clone() {
             Some(_handler) => {
                 let lua = self.lua.clone();
                 self.wait_async_lua_message_result(&_handler, move || {
-                    Self::_call_one(&lua, name, args.clone())
+                    Self::_call(&lua, name, args.clone())
                 })
             }
-            None => Self::_call_one(&self.lua.clone(), name, args),
+            None => Self::_call(&self.lua.clone(), name, args),
         }
     }
-    pub fn call_one_nowait(&self, name: &'static str, args: LuaMessage) -> Result<(), Error> {
+    pub fn call_nowait(&self, name: &'static str, args: MultiLuaMessage) -> Result<(), Error> {
         match self.handler.clone() {
             Some(_handler) => {
                 let lua = self.lua.clone();
                 _handler.lock().unwrap().post(RawFunc::new(move || {
-                    let _ = Self::_call_one(&lua.clone(), name, args.clone());
+                    let _ = Self::_call(&lua.clone(), name, args.clone());
                 }));
             }
             None => {
-                Self::_call_one(&self.lua.clone(), name, args)?;
+                Self::_call(&self.lua.clone(), name, args)?;
             }
         }
         Ok(())
     }
     #[inline]
-    fn _call_one(lua: &Arc<Mutex<Lua>>, name: &str, args: LuaMessage) -> Result<LuaMessage, Error> {
-        let vm = lua.lock().unwrap();
-        vm.context(|lua| {
-            lua.globals()
-                .get::<_, Function>(name)
-                .unwrap()
-                .call::<_, _>(args)
-        })
-    }
-    pub fn call_variadic(
-        &self,
-        name: &'static str,
-        args: Variadic<LuaMessage>,
-    ) -> Result<LuaMessage, Error> {
-        match self.handler.clone() {
-            Some(_handler) => {
-                let lua = self.lua.clone();
-                self.wait_async_lua_message_result(&_handler, move || {
-                    Self::_call_variadic(&lua, name, args.clone())
-                })
-            }
-            None => Self::_call_variadic(&self.lua.clone(), name, args),
-        }
-    }
-    pub fn call_variadic_nowait(
-        &self,
-        name: &'static str,
-        args: Variadic<LuaMessage>,
-    ) -> Result<(), Error> {
-        match self.handler.clone() {
-            Some(_handler) => {
-                let lua = self.lua.clone();
-                _handler.lock().unwrap().post(RawFunc::new(move || {
-                    let _ = Self::_call_variadic(&lua.clone(), name, args.clone());
-                }));
-            }
-            None => {
-                Self::_call_variadic(&self.lua.clone(), name, args)?;
-            }
-        }
-        Ok(())
-    }
-    #[inline]
-    fn _call_variadic(
+    fn _call(
         lua: &Arc<Mutex<Lua>>,
         name: &str,
-        args: Variadic<LuaMessage>,
+        args: MultiLuaMessage,
     ) -> Result<LuaMessage, Error> {
         let vm = lua.lock().unwrap();
         vm.context(|lua| {
@@ -382,6 +337,7 @@ impl Actor {
 
 #[test]
 fn test_actor_new() {
+    use rlua::Variadic;
     use std::iter::FromIterator;
 
     fn test_actor(act: Actor) {
@@ -409,7 +365,7 @@ fn test_actor_new() {
         )
         .ok()
         .unwrap();
-        match act.call_one("testit", LuaMessage::from(1)) {
+        match act.call("testit", LuaMessage::from(1).into()) {
             Ok(_v) => {
                 assert_eq!(Some(2), Option::from(_v));
             }
@@ -427,9 +383,11 @@ fn test_actor_new() {
         )
         .ok()
         .unwrap();
-        match act.call_one(
+        println!("111");
+        match act.call(
             "testlist",
-            Vec::<LuaMessage>::from_iter([3.into(), 2.into()]).into(),
+            // Vec::<LuaMessage>::from_iter([3.into(), 2.into()]).into(),
+            LuaMessage::from_iter([3.into(), 2.into()]).into(),
         ) {
             Ok(_v) => {
                 assert_eq!(Some(2), Option::from(_v));
@@ -448,7 +406,8 @@ fn test_actor_new() {
         )
         .ok()
         .unwrap();
-        match act.call_variadic(
+        println!("222");
+        match act.call(
             "testvargs",
             Variadic::<LuaMessage>::from_iter([6.into(), 7.into()]).into(),
         ) {
