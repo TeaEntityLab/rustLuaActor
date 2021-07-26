@@ -346,7 +346,7 @@ impl Actor {
 #[test]
 fn test_actor_new() {
     use rlua::Variadic;
-    use std::iter::FromIterator;
+    // use std::iter::FromIterator;
 
     fn test_actor(act: Actor) {
         let _ = act.exec_nowait(
@@ -420,7 +420,8 @@ fn test_actor_new() {
             "testvargs",
             // Variadic::<LuaMessage>::from_iter([6.into(), 7.into()]),
             // Vec::<LuaMessage>::from([6.into(), 7.into()]),
-            MultiLuaMessage::from_slice([6, 7]),
+            // MultiLuaMessage::from_slice([6, 7]),
+            (6, 7.0, ""),
         ) {
             Ok(_v) => {
                 assert_eq!(Some(13), Option::from(_v));
