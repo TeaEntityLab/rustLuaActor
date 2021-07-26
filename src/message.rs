@@ -689,7 +689,7 @@ mod tests {
                     )
                     .unwrap()
                 ),
-                discriminant(&LuaMessage::Array(VecDeque::from(t.clone())))
+                discriminant(&LuaMessage::Array(VecDeque::from(t)))
             );
 
             // println!("{:?}\n{:?}", LuaMessage::Array(t.clone()), LuaMessage::from_lua(
